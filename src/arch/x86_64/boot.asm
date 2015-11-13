@@ -1,4 +1,5 @@
 global start
+extern long_mode_start
 
 section .text
 bits 32
@@ -12,7 +13,18 @@ start:
     call setup_page_tables
     call enable_paging
 
-    ; print `OK` to screen
+    ; Load the 64-bit GDT.
+    lgdt [gdt64.pointer]
+
+    ; Update selectors.
+    mov ax, gdt64.data
+    mov ss, ax ; Stack selector.
+    mov ds, ax ; Data selector.
+    mov es, ax ; Extra selector.
+
+    jmp gdt64.code:long_mode_start
+
+    ; Print `OK` to screen.
     mov dword [0xb8000], 0x2f4b2f4f
     hlt
 
@@ -99,19 +111,30 @@ enable_paging:
     or eax, 1 << 5
     mov cr4, eax
 
-    ; Set the long mode bit in the EFER MSR (model specific register)
+    ; Set the long mode bit in the EFER MSR (model specific register).
     mov ecx, 0xc0000080
     rdmsr
     or eax, 1 << 8
     wrmsr
 
-    ; Enable paging in the cr0 register
+    ; Enable paging in the cr0 register.
     mov eax, cr0
     or eax, 1 << 31
     or eax, 1 << 16
     mov cr0, eax
 
     ret
+
+section .rodata
+gdt64:
+    dq 0 ; Zero entry.
+.code: equ $ - gdt64
+    dq (1<<44) | (1<<47) | (1<<41) | (1<<43) | (1<<53) ; Code segment.
+.data: equ $ - gdt64
+    dq (1<<44) | (1<<47) | (1<<41) ; Data segment.
+.pointer:
+    dw $ - gdt64 - 1
+    dq gdt64
 
 section .bss
 
