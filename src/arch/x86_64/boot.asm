@@ -4,9 +4,13 @@ section .text
 bits 32
 start:
     mov esp, stack_top
+
     call test_multiboot
     call test_cpuid
     call test_long_mode
+
+    call setup_page_tables
+    call enable_paging
 
     ; print `OK` to screen
     mov dword [0xb8000], 0x2f4b2f4f
@@ -82,6 +86,30 @@ setup_page_tables:
     inc ecx
     cmp ecx, 512
     jne .map_p2_table
+
+    ret
+
+enable_paging:
+    ; Load P4 to cr3 register (CPU uses this to access the P4 table).
+    mov eax, p4_table
+    mov cr3, eax
+
+    ; Enable PAE-flag in cr4 (Physical Address Extension).
+    mov eax, cr4
+    or eax, 1 << 5
+    mov cr4, eax
+
+    ; Set the long mode bit in the EFER MSR (model specific register)
+    mov ecx, 0xc0000080
+    rdmsr
+    or eax, 1 << 8
+    wrmsr
+
+    ; Enable paging in the cr0 register
+    mov eax, cr0
+    or eax, 1 << 31
+    or eax, 1 << 16
+    mov cr0, eax
 
     ret
 
